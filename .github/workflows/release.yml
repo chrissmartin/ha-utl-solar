@@ -14,41 +14,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
-      - name: Bump version
-        id: bump
+      - name: Get version
+        id: version
         run: |
-          MANIFEST="custom_components/utl_solar/manifest.json"
-          CURRENT=$(python3 -c "import json; print(json.load(open('$MANIFEST'))['version'])")
-          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
-          PATCH=$((PATCH + 1))
-          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
-          python3 -c "
-          import json
-          with open('$MANIFEST', 'r') as f:
-              data = json.load(f)
-          data['version'] = '$NEW_VERSION'
-          with open('$MANIFEST', 'w') as f:
-              json.dump(data, f, indent=2)
-              f.write('\n')
-          "
-          echo "version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
-          echo "Bumped $CURRENT → $NEW_VERSION"
+          VERSION=$(python3 -c "import json; print(json.load(open('custom_components/utl_solar/manifest.json'))['version'])")
+          TAG="v${VERSION}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Tag $TAG already exists, skipping"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "Will create tag $TAG"
+          fi
 
-      - name: Commit and tag
+      - name: Create tag and release
+        if: steps.version.outputs.skip == 'false'
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add custom_components/utl_solar/manifest.json
-          git commit -m "Bump version to ${{ steps.bump.outputs.version }} [skip-release]"
-          git tag "v${{ steps.bump.outputs.version }}"
-          git push origin main --tags
-
-      - name: Create GitHub release
-        run: |
-          gh release create "v${{ steps.bump.outputs.version }}" \
-            --title "v${{ steps.bump.outputs.version }}" \
-            --generate-notes
+          gh release create "v${{ steps.version.outputs.version }}" \
+            --title "v${{ steps.version.outputs.version }}" \
+            --generate-notes \
+            --target "${{ github.sha }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
