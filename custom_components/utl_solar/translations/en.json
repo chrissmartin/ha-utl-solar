@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "UTL Solar RMS Login",
+        "description": "Enter your UTL Solar SUN+ app credentials.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid email or password.",
+      "cannot_connect": "Cannot connect to UTL Solar RMS. Check your internet connection."
+    },
+    "abort": {
+      "already_configured": "This account is already configured."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "solar_power": { "name": "Solar power" },
+      "daily_production": { "name": "Daily production" },
+      "peak_hours_today": { "name": "Peak hours today" },
+      "power_normalized": { "name": "Power normalized" },
+      "on_grid_status": { "name": "Grid status" },
+      "ac_voltage_a": { "name": "Grid voltage" },
+      "ac_current_a": { "name": "Grid current" },
+      "ac_power_a": { "name": "AC output power" },
+      "dc_voltage_1": { "name": "PV string 1 voltage" },
+      "dc_current_1": { "name": "PV string 1 current" },
+      "dc_power_1": { "name": "DC input power" }
+    },
+    "button": {
+      "sync_history": { "name": "Sync history" }
+    }
+  }
+}

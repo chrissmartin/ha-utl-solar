@@ -1,0 +1,11 @@
+{
+  "domain": "utl_solar",
+  "name": "UTL Solar",
+  "codeowners": ["@chrissmartin"],
+  "config_flow": true,
+  "dependencies": ["recorder"],
+  "documentation": "https://github.com/chrissmartin/ha-utl-solar",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/chrissmartin/ha-utl-solar/issues",
+  "version": "1.0.0"
+}
