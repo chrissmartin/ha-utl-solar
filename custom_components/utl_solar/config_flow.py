@@ -9,6 +9,8 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .const import API_BASE_URL, API_LOGIN, DEFAULT_DEVICE_ID, DOMAIN
 
+_REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
+
 
 class UTLSolarConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for UTL Solar."""
@@ -32,6 +34,7 @@ class UTLSolarConfigFlow(ConfigFlow, domain=DOMAIN):
                         "Content-Type": "application/json",
                         "X-Device-Id": DEFAULT_DEVICE_ID,
                     },
+                    timeout=_REQUEST_TIMEOUT,
                 ) as resp:
                     data = await resp.json(content_type=None)
                     if resp.status == 200 and data.get("success"):
@@ -43,7 +46,7 @@ class UTLSolarConfigFlow(ConfigFlow, domain=DOMAIN):
                             data=user_input,
                         )
                     errors["base"] = "invalid_auth"
-            except aiohttp.ClientError:
+            except (aiohttp.ClientError, TimeoutError):
                 errors["base"] = "cannot_connect"
 
         return self.async_show_form(
