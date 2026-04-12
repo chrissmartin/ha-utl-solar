@@ -7,5 +7,5 @@
   "documentation": "https://github.com/chrissmartin/ha-utl-solar",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/chrissmartin/ha-utl-solar/issues",
-  "version": "1.0.0"
+  "version": "1.1.0"
 }
