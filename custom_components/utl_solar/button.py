@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 
@@ -11,11 +12,16 @@ from homeassistant.components.recorder.statistics import async_add_external_stat
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from . import UTLSolarConfigEntry
-from .const import DOMAIN
-from .coordinator import UTLSolarCoordinator
+from .const import (
+    DOMAIN,
+    HISTORY_SYNC_MAX_RETRY_AFTER,
+    HISTORY_SYNC_REQUEST_DELAY,
+)
+from .coordinator import UTLSolarCoordinator, UTLSolarRateLimitError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,6 +60,26 @@ class UTLSolarSyncHistoryButton(ButtonEntity):
             serial_number=inverter.get("inverter_sno", "unknown"),
         )
 
+    async def _async_fetch_month(self, year: int, month: int) -> list[dict]:
+        """Fetch one month, honoring a single Retry-After backoff on HTTP 429."""
+        try:
+            return await self._coordinator.async_fetch_monthly_production(year, month)
+        except UTLSolarRateLimitError as err:
+            delay = min(
+                err.retry_after or HISTORY_SYNC_REQUEST_DELAY,
+                HISTORY_SYNC_MAX_RETRY_AFTER,
+            )
+            _LOGGER.warning(
+                "UTL Solar: rate limited fetching %d-%02d; backing off %.0fs",
+                year,
+                month,
+                delay,
+            )
+            await asyncio.sleep(delay)
+            # Retry once; a second 429 propagates as UpdateFailed and the month
+            # is skipped by the caller rather than retried indefinitely.
+            return await self._coordinator.async_fetch_monthly_production(year, month)
+
     async def async_press(self) -> None:
         """Handle button press — sync historical data into recorder statistics."""
         _LOGGER.info("UTL Solar: starting historical data sync")
@@ -74,18 +100,23 @@ class UTLSolarSyncHistoryButton(ButtonEntity):
         stats: list[StatisticData] = []
         cumulative = 0.0
         current = start_date.replace(day=1)
+        first_request = True
 
         while current <= end_date:
             year, month = current.year, current.month
+            # Pace requests so a multi-year backfill doesn't burst the API.
+            if not first_request:
+                await asyncio.sleep(HISTORY_SYNC_REQUEST_DELAY)
+            first_request = False
             try:
-                monthly = await self._coordinator.async_fetch_monthly_production(year, month)
+                monthly = await self._async_fetch_month(year, month)
                 _LOGGER.debug(
                     "UTL Solar: fetched %d entries for %d-%02d",
                     len(monthly),
                     year,
                     month,
                 )
-            except Exception as err:
+            except (UpdateFailed, KeyError, ValueError, TypeError) as err:
                 _LOGGER.warning("UTL Solar: failed to fetch %d-%02d: %s", year, month, err)
                 monthly = []
 

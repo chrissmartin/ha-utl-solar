@@ -8,6 +8,13 @@
           "email": "Email",
           "password": "Password"
         }
+      },
+      "reauth_confirm": {
+        "title": "UTL Solar RMS Re-authentication",
+        "description": "The stored credentials for {email} are no longer valid. Enter the current password to reconnect.",
+        "data": {
+          "password": "Password"
+        }
       }
     },
     "error": {
@@ -15,7 +22,19 @@
       "cannot_connect": "Cannot connect to UTL Solar RMS. Check your internet connection."
     },
     "abort": {
-      "already_configured": "This account is already configured."
+      "already_configured": "This account is already configured.",
+      "reauth_successful": "Re-authentication was successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "UTL Solar options",
+        "description": "Adjust how often the integration polls the UTL Solar RMS API during the day. Increase this if you hit rate limits. Night-time polling is fixed at a slower rate.",
+        "data": {
+          "scan_interval": "Daytime poll interval (seconds)"
+        }
+      }
     }
   },
   "entity": {

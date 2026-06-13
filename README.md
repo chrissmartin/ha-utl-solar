@@ -58,7 +58,14 @@ Home Assistant integration for [UTL Solar RMS](https://utlsolarrms.com) — moni
 
 ## Data Refresh
 
-The integration polls the UTL Solar RMS API every 5 minutes for updated readings.
+The integration polls the UTL Solar RMS API every 5 minutes for updated readings during the day, and once an hour overnight (7pm–6am) when there's no production.
+
+You can change the daytime poll interval via **Settings** > **Devices & Services** > **UTL Solar** > **Configure** (60–3600 seconds). Increase it if you ever hit API rate limits.
+
+### Rate limiting
+
+- Steady-state polling makes ~3 requests per cycle and is throttled by the poll interval.
+- The **Sync history** button paces its monthly requests and honors `Retry-After` on HTTP 429 responses (retrying a throttled month once before skipping it), so a multi-year backfill won't burst the API.
 
 ## Support
 
