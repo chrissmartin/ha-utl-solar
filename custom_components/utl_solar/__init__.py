@@ -25,11 +25,7 @@ type UTLSolarConfigEntry = ConfigEntry[UTLSolarData]
 
 async def async_setup_entry(hass: HomeAssistant, entry: UTLSolarConfigEntry) -> bool:
     """Set up UTL Solar from a config entry."""
-    coordinator = UTLSolarCoordinator(
-        hass,
-        email=entry.data["email"],
-        password=entry.data["password"],
-    )
+    coordinator = UTLSolarCoordinator(hass, entry)
 
     await coordinator.async_config_entry_first_refresh()
 
@@ -37,7 +33,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: UTLSolarConfigEntry) -> 
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+
     return True
+
+
+async def _async_update_listener(hass: HomeAssistant, entry: UTLSolarConfigEntry) -> None:
+    """Reload the entry when its options change (e.g. the poll interval)."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: UTLSolarConfigEntry) -> bool:

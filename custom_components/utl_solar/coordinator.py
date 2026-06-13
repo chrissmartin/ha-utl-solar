@@ -5,9 +5,12 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import timedelta
+from email.utils import parsedate_to_datetime
 
 import aiohttp
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -20,6 +23,7 @@ from .const import (
     API_PLANT,
     API_PLANT_DAILY_CHART,
     API_PLANT_MONTHLY_CHART,
+    CONF_SCAN_INTERVAL,
     DEFAULT_DEVICE_ID,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
@@ -33,19 +37,53 @@ _LOGGER = logging.getLogger(__name__)
 _REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
 
 
+class UTLSolarRateLimitError(UpdateFailed):
+    """Raised when the API responds with HTTP 429 (too many requests).
+
+    Subclasses ``UpdateFailed`` so ordinary polling treats it as a transient
+    failure, while callers that want to back off can inspect ``retry_after``.
+    """
+
+    def __init__(self, retry_after: float | None = None) -> None:
+        """Store the server-advised backoff, in seconds, if provided."""
+        super().__init__("Rate limited by UTL Solar RMS (HTTP 429)")
+        self.retry_after = retry_after
+
+
+def _parse_retry_after(value: str | None) -> float | None:
+    """Parse a Retry-After header (delta-seconds or HTTP-date) to seconds."""
+    if not value:
+        return None
+    try:
+        return max(0.0, float(value))
+    except ValueError:
+        pass
+    try:
+        retry_dt = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+    if retry_dt is None:
+        return None
+    return max(0.0, (retry_dt - dt_util.utcnow()).total_seconds())
+
+
 class UTLSolarCoordinator(DataUpdateCoordinator[dict]):
     """Coordinator to fetch data from UTL Solar RMS API."""
 
-    def __init__(self, hass: HomeAssistant, email: str, password: str) -> None:
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         """Initialize the coordinator."""
         super().__init__(
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL),
+            update_interval=timedelta(
+                seconds=entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
+            ),
+            config_entry=entry,
         )
-        self._email = email
-        self._password = password
+        self._email = entry.data["email"]
+        self._password = entry.data["password"]
+        self._day_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
         self._token: str | None = None
         self._auth_lock = asyncio.Lock()
 
@@ -67,13 +105,22 @@ class UTLSolarCoordinator(DataUpdateCoordinator[dict]):
                     },
                     timeout=_REQUEST_TIMEOUT,
                 ) as resp:
+                    if resp.status in (401, 403):
+                        raise ConfigEntryAuthFailed(
+                            f"Invalid UTL Solar credentials (status {resp.status})"
+                        )
                     if resp.status != 200:
                         raise UpdateFailed(f"Login failed with status {resp.status}")
                     data = await resp.json(content_type=None)
                     if not data.get("success"):
-                        raise UpdateFailed(f"Login failed: {data.get('message', 'Unknown error')}")
-                    self._token = data["token"]
-                    return self._token
+                        raise ConfigEntryAuthFailed(
+                            f"Login rejected: {data.get('message', 'Unknown error')}"
+                        )
+                    token = data.get("token")
+                    if not token:
+                        raise UpdateFailed("Login response did not include a token")
+                    self._token = token
+                    return token
             except aiohttp.ClientError as err:
                 raise UpdateFailed(f"Connection error during login: {err}") from err
             except TimeoutError as err:
@@ -101,6 +148,10 @@ class UTLSolarCoordinator(DataUpdateCoordinator[dict]):
                 json=json_data,
                 timeout=_REQUEST_TIMEOUT,
             ) as resp:
+                if resp.status == 429:
+                    raise UTLSolarRateLimitError(
+                        _parse_retry_after(resp.headers.get("Retry-After"))
+                    )
                 if resp.status in (401, 403):
                     _LOGGER.debug("Token expired, re-authenticating")
                     self._token = None
@@ -113,6 +164,14 @@ class UTLSolarCoordinator(DataUpdateCoordinator[dict]):
                         json=json_data,
                         timeout=_REQUEST_TIMEOUT,
                     ) as retry_resp:
+                        if retry_resp.status == 429:
+                            raise UTLSolarRateLimitError(
+                                _parse_retry_after(retry_resp.headers.get("Retry-After"))
+                            )
+                        if retry_resp.status in (401, 403):
+                            raise ConfigEntryAuthFailed(
+                                "Authentication rejected after token refresh"
+                            )
                         if retry_resp.status != 200:
                             raise UpdateFailed(
                                 f"API request failed after re-auth: {retry_resp.status}"
@@ -128,6 +187,10 @@ class UTLSolarCoordinator(DataUpdateCoordinator[dict]):
 
     async def _async_update_data(self) -> dict:
         """Fetch latest data from UTL Solar RMS."""
+        # Re-evaluate the poll cadence first so the interval still tracks
+        # time-of-day even when the fetches below fail (e.g. overnight outages).
+        self._adjust_update_interval()
+
         # Fetch devices and plant in parallel for faster updates.
         devices_result: dict | None = None
         plant_result: dict | None = None
@@ -181,7 +244,6 @@ class UTLSolarCoordinator(DataUpdateCoordinator[dict]):
             except UpdateFailed:
                 _LOGGER.warning("Failed to fetch device daily chart")
 
-        self._adjust_update_interval()
         return {
             "inverter": inverter,
             "plant": plant_data,
@@ -194,7 +256,7 @@ class UTLSolarCoordinator(DataUpdateCoordinator[dict]):
         if hour >= NIGHT_START_HOUR or hour < NIGHT_END_HOUR:
             new_interval = timedelta(seconds=NIGHT_SCAN_INTERVAL)
         else:
-            new_interval = timedelta(seconds=DEFAULT_SCAN_INTERVAL)
+            new_interval = timedelta(seconds=self._day_interval)
         if self.update_interval != new_interval:
             _LOGGER.debug("Switching update interval to %s", new_interval)
             self.update_interval = new_interval
@@ -226,8 +288,11 @@ class UTLSolarCoordinator(DataUpdateCoordinator[dict]):
 
     def _get_plant_id(self) -> int:
         """Get the plant ID from cached data."""
-        if self.data and self.data.get("plant"):
-            return self.data["plant"].get("plant_id", self.data["plant"].get("id"))
-        if self.data and self.data.get("inverter"):
-            return self.data["inverter"].get("plantId")
+        if self.data:
+            plant = self.data.get("plant") or {}
+            plant_id = plant.get("plant_id") or plant.get("id")
+            if plant_id is None:
+                plant_id = (self.data.get("inverter") or {}).get("plantId")
+            if plant_id is not None:
+                return plant_id
         raise UpdateFailed("No plant ID available — run a data refresh first")

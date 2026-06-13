@@ -8,3 +8,6 @@ build/
 *.egg
 .DS_Store
 .claude/
+.venv/
+.pytest_cache/
+uv.lock

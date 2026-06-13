@@ -172,7 +172,11 @@ class UTLSolarSensor(CoordinatorEntity[UTLSolarCoordinator], SensorEntity):
         value = source_data.get(self.entity_description.key)
         if value is None:
             return None
+        # Sensors without a state_class (e.g. grid status) are categorical and
+        # should keep their raw value rather than being coerced to a number.
+        if self.entity_description.state_class is None:
+            return value
         try:
             return float(value)
         except (ValueError, TypeError):
-            return value
+            return None
