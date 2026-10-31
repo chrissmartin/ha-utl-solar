@@ -121,6 +121,33 @@ SENSOR_DESCRIPTIONS: tuple[UTLSolarSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
     ),
+    UTLSolarSensorEntityDescription(
+        key="monthly_production",
+        translation_key="monthly_production",
+        source="dashboard",
+        native_unit_of_measurement="kWh",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        suggested_display_precision=2,
+    ),
+    UTLSolarSensorEntityDescription(
+        key="yearly_production",
+        translation_key="yearly_production",
+        source="dashboard",
+        native_unit_of_measurement="kWh",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        suggested_display_precision=2,
+    ),
+    UTLSolarSensorEntityDescription(
+        key="total_production",
+        translation_key="total_production",
+        source="dashboard",
+        native_unit_of_measurement="kWh",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=2,
+    ),
 )
 
 

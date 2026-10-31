@@ -26,6 +26,7 @@ from .const import (
     NIGHT_END_HOUR,
     NIGHT_SCAN_INTERVAL,
     NIGHT_START_HOUR,
+    API_DASHBOARD,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -145,8 +146,24 @@ class UTLSolarCoordinator(DataUpdateCoordinator[dict]):
             except UpdateFailed as err:
                 _LOGGER.warning("Failed to fetch plant: %s", err)
                 return None
+        async def _fetch_dashboard() -> dict | None:
+            """Fetch dashboard production statistics."""
+            try:
+                response = await self._async_request("GET", API_DASHBOARD)
 
-        devices_result, plant_result = await asyncio.gather(_fetch_devices(), _fetch_plant())
+                if response.get("success"):
+                    return response.get("data", {})
+
+                _LOGGER.warning("Failed to fetch dashboard: %s", response.get("message"))
+            except UpdateFailed as err:
+                _LOGGER.warning("Failed to fetch dashboard statistics: %s", err)
+
+            return None
+        devices_result, plant_result, dashboard_result = await asyncio.gather(
+            _fetch_devices(),
+            _fetch_plant(),
+            _fetch_dashboard(),
+        )
 
         if devices_result is None and plant_result is None:
             raise UpdateFailed("All API requests failed")
@@ -186,6 +203,7 @@ class UTLSolarCoordinator(DataUpdateCoordinator[dict]):
             "inverter": inverter,
             "plant": plant_data,
             "realtime": realtime,
+            "dashboard": dashboard_result or {},
         }
 
     def _adjust_update_interval(self) -> None:
