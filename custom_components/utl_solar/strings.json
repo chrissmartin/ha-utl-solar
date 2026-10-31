@@ -30,7 +30,10 @@
       "ac_power_a": { "name": "AC output power" },
       "dc_voltage_1": { "name": "PV string 1 voltage" },
       "dc_current_1": { "name": "PV string 1 current" },
-      "dc_power_1": { "name": "DC input power" }
+      "dc_power_1": { "name": "DC input power" },
+      "monthly_production": { "name": "Monthly production"},
+      "yearly_production": { "name": "Yearly production"},
+      "total_production": { "name": "Lifetime production"}
     },
     "button": {
       "sync_history": { "name": "Sync history" }

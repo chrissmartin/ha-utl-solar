@@ -27,6 +27,9 @@ Home Assistant integration for [UTL Solar RMS](https://utlsolarrms.com) — moni
 | PV string 1 voltage | V    | DC input voltage                       |
 | PV string 1 current | A    | DC input current                       |
 | DC input power      | kW   | DC input power                         |
+| Monthly Production  | kWh  | Monthly Production                     |
+| Yearly Production   | kWh  | Yearly Production                      |
+| Total Production    | kW   | Total Production                       |
 
 ### Button
 
