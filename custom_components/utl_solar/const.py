@@ -12,6 +12,7 @@ API_PLANT_DAILY_CHART = "/api/charts/solar_power_per_plant/daily"
 API_PLANT_MONTHLY_CHART = "/api/charts/solar_power_per_plant/monthly"
 API_PLANT_YEARLY_CHART = "/api/charts/solar_power_per_plant/yearly"
 API_PLANT_TOTAL_CHART = "/api/charts/solar_power_per_plant/total"
+API_DASHBOARD = "/api/dashboard"
 
 DEFAULT_SCAN_INTERVAL = 300  # seconds
 NIGHT_SCAN_INTERVAL = 3600  # seconds (60 min)
